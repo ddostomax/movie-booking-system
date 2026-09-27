@@ -17,7 +17,8 @@ Key endpoints:
     - Trigger marks seats `Booked`
   - Output: `booking_id`
 - `POST /payment` — inserts payment
-  - Input: `booking_id`, `amount`, `method`
+  - Input: `booking_id`, `method`
+  - Amount is computed server-side as `SUM(TICKET.price)` for the booking (never trusted from the client)
   - Inserts into `PAYMENT`
   - Trigger updates `BOOKING.status` to Confirmed/Cancelled
   - Backend additionally releases seats + deletes tickets on failed payment (simple & clean)

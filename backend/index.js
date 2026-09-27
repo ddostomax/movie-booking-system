@@ -183,17 +183,22 @@ app.post("/book", async (req, res) => {
 
 app.post("/payment", async (req, res) => {
   const bookingId = toInt(req.body?.booking_id);
-  const amount = Number(req.body?.amount);
   const method = req.body?.method;
 
-  if (!bookingId || !Number.isFinite(amount) || amount < 0 || !method) {
-    return res.status(400).json({ error: "booking_id, amount, method are required" });
+  if (!bookingId || !method) {
+    return res.status(400).json({ error: "booking_id and method are required" });
   }
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
+    // Amount is derived from the booking's own tickets, never trusted from the client.
+    const [[totals]] = await conn.query(
+      "SELECT COALESCE(SUM(price), 0) AS amount FROM TICKET WHERE booking_id = ?",
+      [bookingId]
+    );
+    const amount = Number(totals.amount);
     const paymentStatus = amount > 0 ? "Successful" : "Failed";
     await conn.query(
       "INSERT INTO PAYMENT (booking_id, amount, method, status) VALUES (?, ?, ?, ?)",

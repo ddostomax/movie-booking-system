@@ -1,124 +1,113 @@
-🎬 Online Movie Ticket Booking System
+# 🎬 District Movies — Online Movie Ticket Booking System
 
-A full-stack web application for browsing movies, selecting seats, and booking tickets with secure online card payments powered by Stripe. Built with a React frontend, an Express + MySQL backend, and Stripe's Payment Intents API for the checkout flow.
+A full-stack movie ticket booking app: browse now-playing movies, pick a showtime, select seats on a live seat map, and complete a checkout flow — backed by a relational schema with triggers that enforce seat-locking and booking-status rules at the database level.
 
+Originally built as a DBMS course project (see [`submissions/`](./submissions) for the schema design write-up), then extended into a full app with a React frontend and an Express API.
 
-A team project modeling a real-world booking platform end to end — from seat selection to payment to persisted bookings.
+## ✨ Features
 
+- **Browse movies & showtimes** — search and filter now-playing movies, grouped showtimes by date
+- **Interactive seat selection** — live seat map per show, colored by Available / Selected / Booked
+- **Booking with race-condition safety** — seat rows are locked (`SELECT ... FOR UPDATE`) inside a transaction so two users can't book the same seat at once
+- **Server-authoritative pricing** — both the booking total and the payment amount are calculated from the database (seat type → price), never trusted from the client
+- **Database-enforced integrity** — MySQL triggers prevent double-booking a seat and keep booking status in sync with payment status
+- **Simulated checkout** — a lightweight payment step (UPI / Card / Wallet) for demo purposes; no real payment gateway is wired up (see [Future Improvements](#-future-improvements))
 
+## 🛠️ Tech Stack
 
+- **Frontend:** React 19 (Create React App), React Router, Tailwind CSS, Framer Motion
+- **Backend:** Node.js, Express 5, `mysql2`
+- **Database:** MySQL (schema + triggers in [`schema.sql`](./schema.sql), seed data in [`data.sql`](./data.sql))
 
-✨ Features
+## 🏗️ Architecture
 
-
-Browse movies & showtimes — view available movies and schedules
-Interactive seat selection — pick seats from a live seat map
-Secure card payments — integrated Stripe (Payment Intents API) checkout
-Booking persistence — confirmed bookings stored in MySQL
-Server-side price calculation — amounts computed on the backend, never trusted from the client
-Environment-based secrets — API keys kept out of source control via .env
-
-
-
-🛠️ Tech Stack
-
-Frontend: React (Create React App) · Tailwind CSS · Stripe Elements (@stripe/react-stripe-js)
-Backend: Node.js · Express · mysql2
-Database: MySQL
-Payments: Stripe (Payment Intents API) — test mode
-
-
-🏗️ Architecture
-
+```
 Frontend (React + Tailwind)
-        │  seat selection → request payment
+        │  browse → select seats → confirm booking → pay
         ▼
-Backend (Express)  ──►  Stripe API   (creates PaymentIntent, returns clientSecret)
-        │
-        ▼
-   MySQL Database   (stores movies, seats, bookings)
+Backend (Express)  ──►  MySQL  (movies, shows, seats, bookings, tickets, payments)
+```
 
-The frontend never sees the Stripe secret key — it only receives a short-lived clientSecret to confirm the payment. The booking is saved only after Stripe confirms the payment succeeded.
+The frontend never computes a price that gets charged — it only displays it. `POST /book` prices each ticket from the seat's type, and `POST /payment` re-derives the amount as `SUM(price)` over that booking's tickets, so a tampered client request can't change what's actually recorded as paid.
 
+## 📁 Project Structure
 
-📁 Project Structure
-
+```
 movie-booking-system/
-├── backend/         # Express server, routes, Stripe + MySQL logic
-├── frontend/        # React app (seat map, checkout UI)
-├── submissions/     # Task submissions / documentation
-├── schema.sql       # MySQL database schema
-├── data.sql         # Seed data
+├── backend/         # Express server: routes + MySQL access (backend/index.js, backend/db.js)
+├── frontend/        # React app (seat map, booking flow, checkout UI)
+├── submissions/     # DBMS coursework: project scope, ER/relational design, queries
+├── schema.sql       # MySQL schema (tables + triggers)
+├── data.sql         # Seed data (movies, theatres, shows, sample bookings)
 └── .gitignore
+```
 
+## 🚀 Getting Started
 
-🚀 Getting Started
+### Prerequisites
 
-Prerequisites
+- Node.js and npm
+- A running MySQL server
 
+### 1. Database setup
 
-Node.js and npm
-MySQL Server
-A free Stripe account (for test API keys)
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS movie_booking;"
+mysql -u root -p movie_booking < schema.sql
+mysql -u root -p movie_booking < data.sql   # optional sample data
+```
 
+### 2. Backend setup
 
-1. Database Setup
-
-bashmysql -u root -p < schema.sql
-mysql -u root -p < data.sql
-
-2. Backend Setup
-
-bashcd backend
+```bash
+cd backend
 npm install
-
-# Create a .env file (this is git-ignored — never commit it)
-# STRIPE_SECRET_KEY=sk_test_your_key_here
-# DB_HOST=localhost, DB_USER=..., DB_PASSWORD=..., DB_NAME=...
-
 npm start
+```
 
-3. Frontend Setup
+By default this connects to `movie_booking` on `localhost:3306` as `root` with no password, and listens on **port 3000**. To override any of that, set environment variables before `npm start`:
 
-bashcd frontend
+```bash
+DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=root DB_PASSWORD=yourpassword DB_NAME=movie_booking PORT=3000 npm start
+```
+
+### 3. Frontend setup
+
+```bash
+cd frontend
 npm install
+PORT=3001 npm start
+```
 
-# Create a .env file:
-# REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_test_your_key_here
+> The frontend talks to the API at `http://localhost:3000` (see `frontend/src/api.js`), and Create React App's dev server also defaults to port 3000 — so the frontend is started with `PORT=3001` to avoid clashing with the backend.
 
-npm start
+Once both are running: **frontend** → http://localhost:3001, **API** → http://localhost:3000.
 
-The app runs at http://localhost:3000 (frontend) and the API at http://localhost:5000 (backend).
+## 💳 Checkout flow
 
+Payment is simulated for demo purposes: pick UPI, Card, or Wallet and confirm — there's no real payment gateway integration. The amount charged is always the server-computed total for that booking's tickets, and a MySQL trigger flips the booking to `Confirmed` (or `Cancelled` on a failed payment) as soon as the payment row is inserted.
 
-💳 Testing Payments
+## 🧠 Technical highlights
 
-Stripe runs in test mode — no real money is charged. Use Stripe's test card:
+- **Transactional booking:** `POST /book` locks the requested seats with `SELECT ... FOR UPDATE` inside a transaction, rejecting the request if any seat is already booked or invalid for that show — this is what actually prevents double-booking under concurrent requests.
+- **Triggers do the bookkeeping:** `prevent_double_booking`, `update_seat_after_ticket`, and `update_booking_status` (all in `schema.sql`) keep seat status and booking status consistent regardless of which code path writes to the tables.
+- **Normalized schema:** nine tables (`USER`, `MOVIE`, `THEATRE`, `SCREEN`, `SEAT`, `SHOWS`, `SHOW_SEAT`, `BOOKING`, `TICKET`, `PAYMENT`) modeling per-show seat inventory rather than a single global seat map. Full ER/relational design reasoning is in [`submissions/TASK2_ER_and_Relational.md`](./submissions/TASK2_ER_and_Relational.md).
 
-FieldValueCard number4242 4242 4242 4242ExpiryAny future date (e.g. 12/34)CVCAny 3 digitsZIPAny 5 digits
+## 📸 Screenshots / Demo
 
-Successful payments appear in your Stripe Dashboard → Payments.
+_Add screenshots or a short screen recording of the booking flow here, e.g.:_
 
+| Home | Seat selection | Payment |
+|---|---|---|
+| `docs/screenshots/home.png` | `docs/screenshots/seats.png` | `docs/screenshots/payment.png` |
 
-🔒 Security Notes
+## 🔮 Future Improvements
 
+- [ ] Integrate a real payment gateway (e.g. Stripe/Razorpay) instead of the simulated checkout
+- [ ] User authentication and a booking history view
+- [ ] Email confirmation on successful booking
+- [ ] Stripe/gateway webhooks for asynchronous payment confirmation
 
-The Stripe secret key lives only on the backend, loaded via environment variables
-Payment amounts are calculated server-side to prevent client-side tampering
-.env files are excluded from version control via .gitignore
+## 👥 Team
 
-
-
-👥 Team
-
-Built by @Goyamjain06 and @ddostomax.
-[Optional: add one line on what you personally worked on — e.g. "I implemented the Stripe payment integration and the booking persistence flow."]
-
-
-🔮 Future Improvements
-
-
- Stripe webhooks to confirm payments asynchronously (more robust than client confirmation)
- User authentication and booking history
- Email confirmation on successful booking
- Prevent double-booking of the same seat with DB-level locking
+Built by [@Goyamjain06](https://github.com/Goyamjain06) and [@ddostomax](https://github.com/ddostomax).

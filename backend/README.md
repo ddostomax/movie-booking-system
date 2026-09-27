@@ -26,6 +26,7 @@ npm start
 - `GET /movies`
 - `GET /shows`
 - `GET /seats/:show_id` (available seats only)
-- `POST /book` body: `{ "user_id": 1, "show_id": 1 }`
-- `POST /payment` body: `{ "booking_id": 1, "amount": 560, "method": "UPI" }`
+- `POST /book` body: `{ "user_id": 1, "show_id": 1, "show_seat_ids": [1, 2] }`
+- `POST /payment` body: `{ "booking_id": 1, "method": "UPI" }` — the amount is computed
+  server-side from the booking's tickets, never accepted from the client.
 

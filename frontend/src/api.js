@@ -31,8 +31,8 @@ export const api = {
       body: JSON.stringify({ user_id, show_id, show_seat_ids })
     });
   },
-  pay({ booking_id, amount, method }) {
-    return request("/payment", { method: "POST", body: JSON.stringify({ booking_id, amount, method }) });
+  pay({ booking_id, method }) {
+    return request("/payment", { method: "POST", body: JSON.stringify({ booking_id, method }) });
   }
 };
 

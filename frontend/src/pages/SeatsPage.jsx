@@ -6,16 +6,7 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { useBooking } from "../state/booking";
-
-function seatLabel(seat) {
-  return `${seat.row_num}${seat.seat_num}`;
-}
-
-const PRICE_BY_TYPE = {
-  Regular: 280,
-  Premium: 420,
-  VIP: 520
-};
+import { PRICE_BY_TYPE, seatLabel } from "../lib/pricing";
 
 export function SeatsPage() {
   const { showId } = useParams();
